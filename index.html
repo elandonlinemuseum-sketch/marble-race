@@ -157,6 +157,28 @@ select,input[type=number]{width:100%;box-sizing:border-box;padding:8px 10px;bord
   @keyframes pop{from{transform:scale(.9) translateY(10px);opacity:0}to{transform:none;opacity:1}}
 }
 
+/* ---------- 우승 확정 플래시 ---------- */
+.flash{position:fixed;inset:0;z-index:26;display:none;place-items:center;pointer-events:none}
+.flash.on{display:grid}
+.flash .box{text-align:center;transform:translateY(-7vh)}
+.flash b{display:block;font-family:var(--mono);font-size:12px;font-weight:700;
+  letter-spacing:.34em;color:var(--gold);margin-bottom:6px}
+.flash span{display:block;font-family:var(--display);font-size:clamp(34px,9vw,78px);
+  line-height:1.05;color:var(--ink);word-break:keep-all;
+  text-shadow:0 0 18px var(--ground),0 0 38px var(--ground),0 6px 30px var(--ground)}
+@media (prefers-reduced-motion:no-preference){
+  .flash.on .box{animation:flashIn 1.7s ease-out forwards}
+  .banner.on .result-list{animation:listIn .5s ease-out .5s backwards}
+}
+@keyframes flashIn{
+  0%{opacity:0;transform:translateY(-7vh) scale(.8)}
+  12%{opacity:1;transform:translateY(-7vh) scale(1.04)}
+  20%{transform:translateY(-7vh) scale(1)}
+  72%{opacity:1}
+  100%{opacity:0;transform:translateY(-9vh) scale(1)}
+}
+@keyframes listIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
 /* ---------- 카운트다운 ---------- */
 .count{position:fixed;inset:0;z-index:25;display:none;place-items:center;pointer-events:none}
 .count.on{display:grid}
@@ -237,6 +259,10 @@ select,input[type=number]{width:100%;box-sizing:border-box;padding:8px 10px;bord
     </div>
   </div>
 </section>
+
+<div class="flash" id="flash" aria-hidden="true">
+  <div class="box"><b id="flashRank">1등</b><span id="flashName"></span></div>
+</div>
 
 <div class="count" id="count" aria-hidden="true"><b id="countNum">3</b></div>
 
@@ -374,13 +400,20 @@ const SECTIONS = {
     c.solid.push(rect(75, y0+80, L1, 15,  a1, "ramp"));
     c.solid.push(rect(W-75, y0+80, L1, 15, -a1, "ramp"));
 
-    const exit = 58, a2 = 0.26;                       // 배출구 58px (구슬 15px)
+    const exit = 56, a2 = 0.26;                       // 좁은 배출구 (구슬 지름 15px)
     const inner = (W - exit)/2;
     const L2 = (inner + 14)/Math.cos(a2);
     const cx = (inner - 14)/2;
     c.solid.push(rect(cx, y0+430, L2, 16,  a2, "ramp"));
     c.solid.push(rect(W-cx, y0+430, L2, 16, -a2, "ramp"));
 
+    /* 차단 막대기: 출구 바로 아래에서 돈다.
+       가로로 누우면 출구를 양쪽 10px씩 덮어 완전히 막고,
+       세로로 서면 옆으로 22px씩 열려 구슬이 빠져나간다. */
+    const lipY = y0 + 430 + (L2/2)*Math.sin(a2);
+    c.spin.push(spinner(W/2, lipY + 12, barGeo(W/2, lipY + 12, 76, 12), 0.018, "blade"));
+
+    // 교반기: 대기 중인 구슬을 계속 휘저어 순서를 흐트러뜨린다
     c.spin.push(spinner(W/2, y0+300, bladeCross(W/2, y0+300, 210, 3), 0.009, "blade"));
     c.solid.push(disc(58, y0+230, 16, "bump"));
     c.solid.push(disc(W-58, y0+230, 16, "bump"));
@@ -666,6 +699,7 @@ function finishMarble(m){
   G.fx.push({type:"pop", x:m.body.position.x, y:G.course.goalY, t:0, life:520, hue:m.hue});
   Composite.remove(G.engine.world, m.body);
   beep(520 + Math.min(m.rank,12)*40, 0.06, "sine");
+  if (m.rank === (G.climaxRank || 1)) showFlash(m.rank, m.name);
   renderRail();
   if (!G.done && G.finished.length >= G.needed) concludeSoon();
 }
@@ -676,11 +710,23 @@ function forceFinishAll(){
     .forEach(function(m){ finishMarble(m); });
 }
 
+let flashTimer = null;
+function showFlash(rank, name){
+  const f = document.getElementById("flash");
+  document.getElementById("flashRank").textContent = rank + "등";
+  document.getElementById("flashName").textContent = name;
+  f.classList.remove("on");
+  void f.offsetWidth;                 // 애니메이션 재시작
+  f.classList.add("on");
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(function(){ f.classList.remove("on"); }, 1700);
+}
+
 let concludeTimer = null;
 function concludeSoon(){
   G.done = true;
   clearTimeout(concludeTimer);
-  concludeTimer = setTimeout(function(){ G.running = false; showResult(); }, 900);
+  concludeTimer = setTimeout(function(){ G.running = false; showResult(); }, 1400);
 }
 
 /* ===================== 렌더 ===================== */
@@ -712,6 +758,31 @@ function interpolate(){
   }
 }
 
+/* 결정적인 순위가 갈리는 순간에만 느리게 감는다.
+   스텝 수만 줄어들 뿐 물리 계산은 동일해서 결과는 바뀌지 않는다. */
+const SLOW_ZONE = 260;
+function climax(){
+  G.climaxOn = false;
+  if (!G.course || !G.running) return 1;
+  const fin = G.finished.length;
+  let live = 0, leadY = -1e9;
+  for (let i=0;i<G.marbles.length;i++){
+    const m = G.marbles[i];
+    if (m.done) continue;
+    live++;
+    if (m.body.position.y > leadY) leadY = m.body.position.y;
+  }
+  if (!live) return 1;
+  // 판가름 나는 순위 직전이거나, 마지막 한 개가 들어올 때
+  const decisive = (fin === (G.climaxRank || 1) - 1) || (live === 1);
+  if (!decisive) return 1;
+  const d = G.course.goalY - leadY;
+  if (d < -20 || d > SLOW_ZONE) return 1;
+  G.climaxOn = true;
+  G.climaxLeadY = leadY;
+  return 0.30 + 0.70 * Math.max(0, d) / SLOW_ZONE;   // 가까울수록 느리게
+}
+
 function camUpdate(k){
   if (!G.course) return;
   const live = G.marbles.filter(function(m){return !m.done;});
@@ -734,6 +805,13 @@ function camUpdate(k){
     const spread = lead - ys[PACK-1];
     wantView = Math.max(340, Math.min(700, spread*1.9 + 320));
     wantY = lead + wantView*0.12;   // 선두를 화면 위쪽 38%에 두고 앞길을 보여준다
+  }
+
+  // 결승 순간에는 선과 선두를 함께 담아 바싹 붙인다
+  if (G.climaxOn && lead !== null){
+    const gap = Math.max(60, G.course.goalY - lead);
+    wantView = Math.max(230, Math.min(wantView, gap * 2.6));
+    wantY = (lead + G.course.goalY) / 2;
   }
 
   // 선두가 화면 밖으로 밀릴수록 따라가는 강도만 올린다 (끊어 붙이면 튀어 보인다)
@@ -946,7 +1024,7 @@ function loop(ts){
   if (G.running){
     // 고정 시간간격이라 배속은 재생속도만 바꿀 뿐 결과에는 영향이 없다.
     // 자동 가속은 넣지 않는다 — 속도가 저 혼자 변하면 조작처럼 보인다.
-    const mult = G.ff ? 6 : G.speed;
+    const mult = G.ff ? 6 : G.speed * climax();
     G.acc += dt * mult;
     let n = 0;
     while (G.acc >= DT && n < 28){ stepPhysics(); G.acc -= DT; n++; }
@@ -987,6 +1065,7 @@ const ui = {
   rail:el("rail"), railHead:el("railHead"), rankList:el("rankList"),
   banner:el("banner"), who:el("bannerWho"), sub:el("bannerSub"), kicker:el("bannerKicker"),
   again:el("btnAgain"), close:el("btnClose"), count:el("count"), countNum:el("countNum"),
+  flash:el("flash"), flashRank:el("flashRank"), flashName:el("flashName"),
   ff:el("btnFF"), cnt:el("cntHint"), copy:el("btnCopy"), xlsx:el("btnXlsx"), resultList:el("resultList"),
   card:document.querySelector("#banner .card")
 };
@@ -1137,6 +1216,8 @@ function start(){
   ui.banner.classList.remove("on");
   setup(entries, ui.map.value);
   G.needed = neededCount(G.marbles.length);
+  const wr = winnerRanks(G.marbles.length);
+  G.climaxRank = wr.length ? Math.min.apply(null, wr) : 1;   // 긴장이 걸리는 순위
   ui.panel.classList.add("min"); ui.fold.textContent = "▴";
   ui.start.disabled = true;
 
