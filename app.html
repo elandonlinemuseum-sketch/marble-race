@@ -1,0 +1,1309 @@
+<title>구슬 레이스 추첨기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&family=Roboto+Mono:wght@500;700&display=swap">
+<style>
+:root{
+  --ground:#F4F1E8; --ground2:#E3DECD; --track:#AEB5C9; --track-edge:#868EA6;
+  --pin:#8B93AC; --spin:#7A6FA8; --bump:#E0796B;
+  --ink:#1B1F2E; --ink-soft:#5A6076; --ink-faint:#8E93A6;
+  --panel:rgba(255,255,255,.88); --panel-line:rgba(27,31,46,.14); --panel-shadow:0 8px 32px rgba(27,31,46,.14);
+  --field:#FFFFFF; --field-line:rgba(27,31,46,.18);
+  --gold:#C68A07; --gold-ink:#1B1F2E; --hot:#D93A5C; --cool:#2F8F7E;
+  --grid:rgba(27,31,46,.07);
+  --display:'Black Han Sans',"Noto Sans KR",system-ui,sans-serif;
+  --body:'Noto Sans KR',system-ui,-apple-system,sans-serif;
+  --mono:'Roboto Mono',ui-monospace,SFMono-Regular,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1220; --ground2:#151B2D; --track:#2B3450; --track-edge:#3E4A6E;
+    --pin:#5A6889; --spin:#8878D6; --bump:#FF7A66;
+    --ink:#EDEFF6; --ink-soft:#A3ABC4; --ink-faint:#6C7590;
+    --panel:rgba(20,26,43,.86); --panel-line:rgba(237,239,246,.14); --panel-shadow:0 8px 32px rgba(0,0,0,.45);
+    --field:rgba(8,11,20,.7); --field-line:rgba(237,239,246,.18);
+    --gold:#F0B429; --gold-ink:#16192A; --hot:#FF5C7A; --cool:#3FBFA8;
+    --grid:rgba(237,239,246,.055);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1220; --ground2:#151B2D; --track:#2B3450; --track-edge:#3E4A6E;
+  --pin:#5A6889; --spin:#8878D6; --bump:#FF7A66;
+  --ink:#EDEFF6; --ink-soft:#A3ABC4; --ink-faint:#6C7590;
+  --panel:rgba(20,26,43,.86); --panel-line:rgba(237,239,246,.14); --panel-shadow:0 8px 32px rgba(0,0,0,.45);
+  --field:rgba(8,11,20,.7); --field-line:rgba(237,239,246,.18);
+  --gold:#F0B429; --gold-ink:#16192A; --hot:#FF5C7A; --cool:#3FBFA8;
+  --grid:rgba(237,239,246,.055);
+}
+html,body{height:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--body);overflow:hidden;
+  -webkit-font-smoothing:antialiased}
+#stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+button,select,input,textarea{font-family:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* ---------- 설정 패널 ---------- */
+.panel{position:fixed;left:0;top:0;z-index:20;
+  width:min(370px,calc(100vw - 24px));
+  margin:calc(12px + env(safe-area-inset-top,0px)) 12px 12px;
+  background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--panel-line);border-radius:14px;box-shadow:var(--panel-shadow);
+  display:flex;flex-direction:column;overflow:hidden}
+.panel-head{display:flex;align-items:center;gap:10px;padding:12px 14px}
+.brand{font-family:var(--display);font-size:19px;letter-spacing:.01em;line-height:1;flex:1;
+  display:flex;align-items:baseline;gap:8px}
+.brand em{font-style:normal;color:var(--gold)}
+.brand small{font-family:var(--body);font-weight:500;font-size:11px;color:var(--ink-faint);letter-spacing:.06em}
+.icon-btn{width:30px;height:30px;display:grid;place-items:center;border:1px solid var(--panel-line);
+  border-radius:9px;background:transparent;font-size:14px;line-height:1;transition:background .15s}
+.icon-btn:hover{background:var(--ground2)}
+.panel-body{display:flex;flex-direction:column;gap:12px;padding:0 14px 14px}
+.panel.min .panel-body{display:none}
+.panel.min{width:auto}
+.lbl-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.lbl-row label.lbl{margin-bottom:6px}
+.mini{border:1px solid var(--panel-line);background:transparent;border-radius:7px;
+  padding:3px 8px;font-size:11px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;
+  white-space:nowrap;transition:.15s}
+.mini:hover{background:var(--ground2);color:var(--ink)}
+label.lbl{display:block;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-faint);margin-bottom:6px}
+textarea#roster{width:100%;box-sizing:border-box;height:132px;resize:vertical;padding:10px 12px;
+  border-radius:10px;border:1px solid var(--field-line);background:var(--field);
+  font-size:14px;line-height:1.65}
+.hint{font-size:11.5px;color:var(--ink-faint);margin-top:6px;line-height:1.6}
+.hint code{font-family:var(--mono);font-size:11px;background:var(--ground2);padding:1px 5px;border-radius:4px;color:var(--ink-soft)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+select,input[type=number]{width:100%;box-sizing:border-box;padding:8px 10px;border-radius:9px;
+  border:1px solid var(--field-line);background:var(--field);font-size:13px}
+.seg{display:flex;gap:4px;padding:3px;background:var(--ground2);border-radius:10px}
+.seg button{flex:1;padding:7px 4px;border:0;border-radius:7px;background:transparent;
+  font-size:12.5px;font-weight:700;color:var(--ink-soft);transition:.15s}
+.seg button[aria-pressed=true]{background:var(--gold);color:var(--gold-ink)}
+.rankrow{display:flex;align-items:center;gap:8px}
+.rankrow span{font-size:12.5px;color:var(--ink-soft);white-space:nowrap}
+.rankrow input{width:72px}
+.toggles{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.tg{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-soft);cursor:pointer}
+.tg input{width:34px;height:19px;appearance:none;border-radius:99px;background:var(--field-line);
+  position:relative;cursor:pointer;transition:background .18s;flex:none;margin:0}
+.tg input::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;
+  background:var(--ground);transition:transform .18s}
+.tg input:checked{background:var(--cool)}
+.tg input:checked::after{transform:translateX(15px)}
+.actions{display:flex;gap:8px}
+.btn{flex:1;padding:11px 10px;border-radius:11px;border:1px solid var(--panel-line);
+  background:transparent;font-size:13.5px;font-weight:700;transition:.15s}
+.btn:hover{background:var(--ground2)}
+.btn.primary{border-color:transparent;background:var(--gold);color:var(--gold-ink);flex:1.6}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* ---------- 순위 레일 ---------- */
+.rail{position:fixed;right:0;top:0;z-index:15;width:min(230px,38vw);
+  margin:calc(12px + env(safe-area-inset-top,0px)) 12px 12px;
+  display:flex;flex-direction:column;gap:8px;pointer-events:none;text-align:right}
+.rail-head{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--ink-faint)}
+.rank-list{display:flex;flex-direction:column;gap:3px;max-height:56vh;overflow:hidden}
+.rank{display:flex;align-items:center;justify-content:flex-end;gap:8px;font-size:14px;font-weight:700}
+.rank .n{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);font-variant-numeric:tabular-nums;min-width:22px}
+.rank .dot{width:9px;height:9px;border-radius:50%;order:3;flex:none}
+.rank .nm{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank.win .nm{color:var(--gold)}
+.rank.fade{opacity:.5}
+
+/* ---------- 결과 배너 ---------- */
+.banner{position:fixed;inset:0;z-index:30;display:none;place-items:center;
+  background:color-mix(in srgb,var(--ground) 72%,transparent);backdrop-filter:blur(6px)}
+.banner.on{display:grid}
+.card{width:min(440px,calc(100vw - 32px));padding:28px 26px 22px;text-align:center;
+  background:var(--panel);border:1px solid var(--panel-line);border-radius:18px;box-shadow:var(--panel-shadow)}
+.card .kicker{font-size:11px;font-weight:700;letter-spacing:.16em;color:var(--ink-faint)}
+.card .who{font-family:var(--display);font-size:clamp(28px,7vw,44px);line-height:1.2;margin:10px 0 2px;
+  color:var(--gold);word-break:keep-all}
+.card .who .line{display:block}
+.card .sub{font-size:12.5px;color:var(--ink-faint);margin-bottom:18px}
+.card .actions{gap:8px;flex-wrap:wrap}
+.card.wide{width:min(760px,calc(100vw - 32px));text-align:left}
+.card.wide .kicker,.card.wide .who,.card.wide .sub{text-align:center}
+.result-list{list-style:none;margin:0 0 18px;padding:4px;display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:1px 12px;
+  max-height:min(46vh,340px);overflow:auto;border-top:1px solid var(--panel-line);
+  border-bottom:1px solid var(--panel-line);padding-top:10px;padding-bottom:10px}
+.res{display:flex;align-items:center;gap:7px;padding:3px 6px;border-radius:6px;font-size:13px}
+.res .n{font-family:var(--mono);font-size:11px;color:var(--ink-faint);min-width:26px;
+  text-align:right;font-variant-numeric:tabular-nums;flex:none}
+.res .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.res .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.res.top{background:color-mix(in srgb,var(--gold) 18%,transparent);font-weight:700}
+.res.top .n{color:var(--gold)}
+.seg{flex-wrap:wrap}
+.seg button{min-width:56px}
+@media (prefers-reduced-motion:no-preference){
+  .banner.on .card{animation:pop .32s cubic-bezier(.2,1.3,.4,1)}
+  @keyframes pop{from{transform:scale(.9) translateY(10px);opacity:0}to{transform:none;opacity:1}}
+}
+
+/* ---------- 카운트다운 ---------- */
+.count{position:fixed;inset:0;z-index:25;display:none;place-items:center;pointer-events:none}
+.count.on{display:grid}
+.count b{font-family:var(--display);font-size:clamp(70px,18vw,150px);color:var(--gold);
+  text-shadow:0 6px 30px color-mix(in srgb,var(--gold) 40%,transparent)}
+
+@media (max-width:760px){
+  .panel{width:auto;right:0;top:auto;bottom:0;margin:0 0 env(safe-area-inset-bottom,0px);
+    border-radius:16px 16px 0 0;border-bottom:0;max-height:72vh}
+  .panel-body{overflow:auto}
+  .rail{width:auto;left:0;text-align:right}
+  .rank-list{max-height:34vh}
+}
+</style>
+
+<canvas id="stage"></canvas>
+<h1 class="sr">구슬 레이스 추첨기 — 광고 없는 마블 추첨</h1>
+
+<aside class="rail" id="rail" hidden>
+  <div class="rail-head" id="railHead">0 / 0</div>
+  <div class="rank-list" id="rankList"></div>
+</aside>
+
+<section class="panel" id="panel">
+  <div class="panel-head">
+    <div class="brand">구슬 <em>레이스</em> <small>추첨기</small></div>
+    <button class="icon-btn" id="btnFF" title="빨리 감기" aria-label="빨리 감기" hidden>⏩</button>
+    <button class="icon-btn" id="btnTheme" title="밝게 / 어둡게" aria-label="테마 전환">◐</button>
+    <button class="icon-btn" id="btnFold" title="접기" aria-label="패널 접기">▾</button>
+  </div>
+  <div class="panel-body">
+    <div>
+      <div class="lbl-row">
+        <label class="lbl" for="roster">참가자</label>
+        <button type="button" class="mini" id="btnSample">예시 100명 넣기</button>
+      </div>
+      <textarea id="roster" spellcheck="false" placeholder="쉼표 또는 줄바꿈으로 구분해 입력">김서연, 이하준, 박은우, 최우진, 정예은, 강재원, 조아린, 윤윤아, 장지안, 임수현, 한찬우, 오도하, 서이현, 신태경, 권성현, 황시우, 안지아, 송건우, 전서진, 홍민준, 고세아, 문규민, 양태오, 손정우, 배아율, 백윤서, 허다올, 유상우, 남우주, 심예준, 노수아, 하시윤, 곽현우, 성지윤, 차다인, 주지환, 우가윤, 구하영, 민민규, 진별하, 김다올, 이상우, 박우주, 최예준, 정수아, 강시윤, 조현우, 윤지윤, 장다인, 임지환, 한가윤, 오하영, 서민규, 신별하, 권준호, 황여진, 안라온, 송서준, 전민서, 홍소율, 고준서, 문하은, 양소은, 손동현, 배현서, 백예린, 허지성, 유주하, 남가온, 심유찬, 노현진, 하도윤, 곽유진, 성지민, 차지우, 주수빈, 우유나, 구준혁, 민민재, 진준영, 김지성, 이주하, 박가온, 최유찬, 정현진, 강도윤, 조유진, 윤지민, 장지우, 임수빈, 한유나, 오준혁, 서민재, 신준영, 권서율, 황시온, 안희원, 송재이, 전연서, 홍하윤</textarea>
+      <div class="hint"><span id="cntHint">총 100개</span> · <code>이름*3</code> 같은 이름 3개 · <code>이름/5</code> 스킬 가중치(1~10)</div>
+    </div>
+    <div class="grid2">
+      <div>
+        <label class="lbl" for="map">코스</label>
+        <select id="map"></select>
+      </div>
+      <div>
+        <label class="lbl" for="speed">속도</label>
+        <select id="speed">
+          <option value="0.7">느긋하게</option>
+          <option value="1" selected>보통</option>
+          <option value="1.6">빠름</option>
+          <option value="2.4">아주 빠름</option>
+        </select>
+      </div>
+    </div>
+    <div>
+      <label class="lbl">당첨 기준</label>
+      <div class="seg" id="modeSeg" role="group">
+        <button data-mode="all" aria-pressed="true">전체 순위</button>
+        <button data-mode="first" aria-pressed="false">1등</button>
+        <button data-mode="rank" aria-pressed="false">N등</button>
+        <button data-mode="range" aria-pressed="false">N~M등</button>
+        <button data-mode="last" aria-pressed="false">꼴찌</button>
+      </div>
+      <div class="rankrow" id="rankRow" style="margin-top:8px;display:none">
+        <span id="rankLabel">등수</span>
+        <input type="number" id="rankA" value="1" min="1" step="1">
+        <span id="rankSep" hidden>~</span>
+        <input type="number" id="rankB" value="3" min="1" step="1" hidden>
+      </div>
+    </div>
+    <div class="toggles">
+      <label class="tg"><input type="checkbox" id="chkSkill">스킬(폭탄)</label>
+      <label class="tg"><input type="checkbox" id="chkSound">효과음</label>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnShuffle">섞기</button>
+      <button class="btn primary" id="btnStart">시작</button>
+    </div>
+  </div>
+</section>
+
+<div class="count" id="count" aria-hidden="true"><b id="countNum">3</b></div>
+
+<div class="banner" id="banner" role="dialog" aria-live="polite" aria-label="추첨 결과">
+  <div class="card">
+    <div class="kicker" id="bannerKicker">당첨</div>
+    <div class="who" id="bannerWho"></div>
+    <div class="sub" id="bannerSub"></div>
+    <ol class="result-list" id="resultList" hidden></ol>
+    <div class="actions">
+      <button class="btn" id="btnXlsx" hidden>엑셀 받기</button>
+      <button class="btn" id="btnCopy" hidden>순위 복사</button>
+      <button class="btn" id="btnAgain">다시 추첨</button>
+      <button class="btn primary" id="btnClose">확인</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
+<script>
+(function(){
+"use strict";
+const {Engine, Composite, Bodies, Body, Vector} = Matter;
+
+/* ===================== 코스 설계 =====================
+   물리 좌표는 픽셀 기준. 코스 폭 W, 구간 하나의 높이 SH.
+   각 구간 빌더는 (ctx, y0) 를 받아 정적 장애물과 회전체를 추가한다. */
+const W = 480, SH = 560, WALL = 24;
+let R = 9.5;   // 인원수에 따라 setup()에서 조정
+const MAXN = 200;
+
+function rect(x,y,w,h,angle,kind,opt){
+  const b = Bodies.rectangle(x,y,w,h,Object.assign({
+    isStatic:true, angle:angle||0, friction:0.02, frictionStatic:0.1, restitution:0.14
+  }, opt||{}));
+  b.plugin = {kind:kind||"wall", w:w, h:h};
+  return b;
+}
+/* 평평한 가로 선반은 구슬이 그 위에 그대로 멈춘다. 항상 지붕 모양으로 만든다. */
+function tent(c, cx, y, width, thick){
+  const a = 0.13, half = width/2, L = half/Math.cos(a), dy = half*Math.tan(a)/2;
+  c.solid.push(rect(cx - half/2, y + dy, L, thick, -a, "ramp"));
+  c.solid.push(rect(cx + half/2, y + dy, L, thick,  a, "ramp"));
+}
+function disc(x,y,r,kind,opt){
+  const b = Bodies.circle(x,y,r,Object.assign({
+    isStatic:true, friction:0.01, restitution:(kind==="bump"?1.02:0.32)
+  }, opt||{}));
+  b.plugin = {kind:kind||"pin", r:r};
+  return b;
+}
+
+/* 회전체: 정적이 아닌 강체를 매 틱 제자리에 고정해 운동량만 전달한다 */
+function spinner(cx, cy, geo, speed, kind){
+  const body = Body.create({parts:geo.parts, friction:0.02, restitution:0.3, density:0.08});
+  Body.setPosition(body, {x:cx, y:cy});
+  body.plugin = {kind:kind||"blade"};
+  return {body:body, pivot:{x:cx,y:cy}, speed:speed, mode:"spin",
+          blades:geo.blades, pa:0, ra:0};
+}
+function pendulum(cx, cy, geo, amp, period, phase){
+  const body = Body.create({parts:geo.parts, friction:0.02, restitution:0.3, density:0.08});
+  Body.setPosition(body, {x:cx, y:cy});
+  body.plugin = {kind:"bar"};
+  return {body:body, pivot:{x:cx,y:cy}, amp:amp, period:period, phase:phase||0, mode:"swing",
+          blades:geo.blades, pa:0, ra:0};
+}
+function bladeCross(cx, cy, len, n){
+  const parts = [], blades = [];
+  for (let i=0;i<n;i++){
+    const a = Math.PI*i/n;
+    parts.push(Bodies.rectangle(cx,cy,len,13,{angle:a}));
+    blades.push({len:len, thick:13, off:a});
+  }
+  return {parts:parts, blades:blades};
+}
+function barGeo(cx, cy, len, thick){
+  return {parts:[Bodies.rectangle(cx,cy,len,thick)], blades:[{len:len, thick:thick, off:0}]};
+}
+
+/* --- 구간 빌더 --- */
+const SECTIONS = {
+  // 핀볼 플링코
+  plinko(c, y0){
+    const rows = 6, gap = 64;
+    for (let r=0;r<rows;r++){
+      const y = y0+80+r*78, off = (r%2)*gap/2;
+      for (let x=36+off; x<=W-30; x+=gap) c.solid.push(disc(x, y, 7.5, "pin"));
+    }
+    tent(c, W*0.5, y0+SH-26, W*0.34, 14);
+  },
+  // 회전 바람개비
+  pinwheels(c, y0){
+    c.spin.push(spinner(W*0.31, y0+165, bladeCross(W*0.31, y0+165, 196, 2),  0.015, "blade"));
+    c.spin.push(spinner(W*0.70, y0+395, bladeCross(W*0.70, y0+395, 196, 2), -0.015, "blade"));
+    // 벽에 붙은 램프는 반드시 벽에서 멀어지는 쪽으로 내려가야 한다 (반대면 구석에 갇힘)
+    c.solid.push(rect(W-56, y0+58, 150, 13, -0.42, "ramp"));
+    c.solid.push(rect(56,    y0+292, 150, 13,  0.42, "ramp"));
+  },
+  // 좌우로 흔들리는 시소
+  seesaws(c, y0){
+    const at = [[W*0.34,130,0],[W*0.66,290,Math.PI*0.7],[W*0.5,450,Math.PI*1.3]];
+    at.forEach(function(p,i){
+      const cx=p[0], cy=y0+p[1];
+      c.spin.push(pendulum(cx, cy, barGeo(cx,cy,250,14), 0.38, 130+i*22, p[2]));
+      c.solid.push(disc(cx, cy, 10, "hub"));
+    });
+  },
+  // 깔때기 + 중앙 쐐기 분기
+  funnel(c, y0){
+    // 중앙 통로 120px(구슬 지름 19px)을 확보하도록 경사벽 길이를 역산한다
+    const mouth = 180, a = 0.60, L = (mouth + 14) / Math.cos(a);
+    c.solid.push(rect((mouth-14)/2, y0+140, L, 16,  a, "ramp"));
+    c.solid.push(rect(W-(mouth-14)/2, y0+140, L, 16, -a, "ramp"));
+    // 쐐기: 통로를 좌우 49px 두 갈래로 가른다
+    c.solid.push(rect(W/2, y0+320, 22, 150, 0, "ramp"));
+    c.solid.push(disc(W/2, y0+245, 11, "pin"));
+    const ea = 0.24, eL = 200 / Math.cos(ea);   // 중앙 100px 통로
+    c.solid.push(rect(90, y0+470, eL, 14,  ea, "ramp"));
+    c.solid.push(rect(W-90, y0+470, eL, 14, -ea, "ramp"));
+  },
+  // 범퍼 필드
+  bumpers(c, y0){
+    const at = [[0.28,110],[0.72,110],[0.5,225],[0.22,340],[0.78,340],[0.5,455]];
+    at.forEach(function(p){ c.solid.push(disc(W*p[0], y0+p[1], 25, "bump")); });
+    c.solid.push(rect(30, y0+60, 130, 13, 0.5, "ramp"));
+    c.solid.push(rect(W-30, y0+60, 130, 13, -0.5, "ramp"));
+    tent(c, W*0.5, y0+SH-34, W*0.46, 14);
+  },
+  /* 웅덩이: 구슬을 모아 좁은 배출구로 흘린다.
+     선두가 벌어놓은 간격이 여기서 통째로 사라지므로 역전이 가장 크게 난다.
+     교반기가 배출구 위에서 계속 휘저어 순서를 흐트러뜨리고 막힘도 막는다. */
+  pool(c, y0){
+    const a1 = 0.50, L1 = 150/Math.cos(a1);
+    c.solid.push(rect(75, y0+80, L1, 15,  a1, "ramp"));
+    c.solid.push(rect(W-75, y0+80, L1, 15, -a1, "ramp"));
+
+    const exit = 58, a2 = 0.26;                       // 배출구 58px (구슬 15px)
+    const inner = (W - exit)/2;
+    const L2 = (inner + 14)/Math.cos(a2);
+    const cx = (inner - 14)/2;
+    c.solid.push(rect(cx, y0+430, L2, 16,  a2, "ramp"));
+    c.solid.push(rect(W-cx, y0+430, L2, 16, -a2, "ramp"));
+
+    c.spin.push(spinner(W/2, y0+300, bladeCross(W/2, y0+300, 210, 3), 0.009, "blade"));
+    c.solid.push(disc(58, y0+230, 16, "bump"));
+    c.solid.push(disc(W-58, y0+230, 16, "bump"));
+  },
+  /* 물레방아: 천천히 도는 큰 날개가 구슬을 붙잡았다 놓는다.
+     날개에 걸리면 한 바퀴를 기다려야 해서 선두가 뒤로 밀린다. */
+  wheel(c, y0){
+    const cy = y0+270;
+    c.spin.push(spinner(W/2, cy, bladeCross(W/2, cy, 300, 4), 0.007, "blade"));
+    c.solid.push(rect(44, y0+70, 150, 13, 0.50, "ramp"));
+    c.solid.push(rect(W-44, y0+70, 150, 13, -0.50, "ramp"));
+    c.solid.push(disc(40, cy+40, 14, "bump"));
+    c.solid.push(disc(W-40, cy+40, 14, "bump"));
+    tent(c, W*0.5, y0+SH-46, W*0.36, 14);
+  },
+  // 대형 회전판
+  rotor(c, y0){
+    const cy = y0+250;
+    c.spin.push(spinner(W/2, cy, bladeCross(W/2, cy, 310, 3), 0.011, "blade"));
+    c.solid.push(rect(26, y0+70, 140, 13, 0.55, "ramp"));
+    c.solid.push(rect(W-26, y0+70, 140, 13, -0.55, "ramp"));
+    tent(c, W*0.5, y0+SH-40, W*0.3, 14);
+    c.solid.push(disc(72, y0+SH-90, 8, "pin"));
+    c.solid.push(disc(W-72, y0+SH-90, 8, "pin"));
+  }
+};
+
+const MAPS = [
+  {key:"classic",  name:"클래식",    plan:["pinwheels","plinko","seesaws","bumpers","pool"]},
+  {key:"pinball",  name:"핀볼",      plan:["bumpers","plinko","wheel","funnel","pool"]},
+  {key:"carousel", name:"회전목마",  plan:["pinwheels","seesaws","rotor","wheel","pool"]},
+  {key:"whirl",    name:"소용돌이",  plan:["wheel","funnel","plinko","rotor","pool"]},
+  {key:"short",    name:"속성(짧음)",plan:["plinko","pool"]},
+  {key:"random",   name:"랜덤",      plan:null}
+];
+const ALL_SECTIONS = Object.keys(SECTIONS);
+
+function buildCourse(mapKey){
+  const map = MAPS.find(function(m){return m.key===mapKey;}) || MAPS[0];
+  let plan = map.plan;
+  if (!plan){
+    plan = [];
+    const bag = ALL_SECTIONS.slice();
+    for (let i=0;i<5;i++) plan.push(bag[(Math.random()*bag.length)|0]);
+    // 역전 장치가 하나도 없으면 가운데를 웅덩이로 바꾼다
+    plan[plan.length-1] = "pool";   // 결승 직전은 항상 웅덩이
+  }
+  const c = {solid:[], spin:[]};
+  const top = 300;                       // 출발 대기 구간
+  plan.forEach(function(name, i){ SECTIONS[name](c, top + i*SH); });
+
+  const bodyEnd = top + plan.length*SH;
+
+  /* 마무리 주로.
+     좁은 출구를 두면 결승선도 한 줄로 띄엄띄엄 통과해 접전이 안 난다.
+     폭 전체를 쓰는 핀밭으로 통과 시간을 흩어, 앞뒤 간격을 뭉개고
+     마지막까지 순위가 뒤집히게 한다. (직전 구간이 웅덩이라 이미 뭉쳐 있다) */
+  for (let r=0;r<6;r++){
+    const y = bodyEnd + 70 + r*78, off = (r%2)*32;
+    for (let x=32+off; x<=W-28; x+=64) c.solid.push(disc(x, y, 8, "pin"));
+  }
+  // 마지막 갈림: 나란히 내려온 구슬을 한 번 더 흩는다
+  tent(c, W*0.28, bodyEnd+556, 150, 13);
+  tent(c, W*0.72, bodyEnd+556, 150, 13);
+  c.solid.push(disc(W*0.5, bodyEnd+612, 10, "bump"));
+
+  const goalY = bodyEnd + 670;
+  const height = goalY + 140;
+
+  // 좌우 외벽
+  c.solid.push(rect(-WALL/2, height/2-150, WALL, height+700, 0, "edge"));
+  c.solid.push(rect(W+WALL/2, height/2-150, WALL, height+700, 0, "edge"));
+  // 출발 게이트(시작 시 제거)
+  const gate = rect(W/2, top-16, W, 16, 0, "gate");
+
+  return {solid:c.solid, spin:c.spin, gate:gate, height:height, goalY:goalY, plan:plan, mapName:map.name};
+}
+
+/* ===================== 게임 상태 ===================== */
+const cvs = document.getElementById("stage");
+const ctx = cvs.getContext("2d");
+const DPR = Math.min(window.devicePixelRatio||1, 2);
+
+const G = {
+  engine:null, course:null, marbles:[], finished:[], fx:[],
+  running:false, armed:false, raceMs:0, acc:0, last:0,
+  cam:{x:W/2, y:120, scale:1, view:640, sx:0, sy:0},
+  needed:1, mode:"first", speed:1, skill:true, sound:false, done:false
+};
+
+function themeColors(){
+  const s = getComputedStyle(document.documentElement);
+  const v = function(n){ return s.getPropertyValue(n).trim(); };
+  return {ground:v("--ground"), ground2:v("--ground2"), track:v("--track"), edge:v("--track-edge"),
+          pin:v("--pin"), spin:v("--spin"), bump:v("--bump"), ink:v("--ink"), soft:v("--ink-soft"),
+          faint:v("--ink-faint"), gold:v("--gold"), grid:v("--grid"), hot:v("--hot")};
+}
+let COL = themeColors();
+
+/* 이름 파싱: "이름*3" 복수, "이름/5" 가중치 */
+function parseEntries(text){
+  const out = [];
+  text.split(/[,\n\r]+/).forEach(function(raw){
+    const t = raw.trim();
+    if (!t) return;
+    const mCount = /\*\s*(\d+)/.exec(t);
+    const mWeight = /\/\s*(\d+)/.exec(t);
+    const name = (/^\s*([^*\/]+)/.exec(t) || [,""])[1].trim();
+    if (!name) return;
+    const count = Math.max(1, Math.min(200, mCount ? parseInt(mCount[1],10) : 1));
+    const weight = Math.max(1, Math.min(10, mWeight ? parseInt(mWeight[1],10) : 1));
+    out.push({name:name, count:count, weight:weight});
+  });
+  return out;
+}
+
+function makeMarbles(entries){
+  const list = [];
+  let total = 0;
+  entries.forEach(function(e){ total += e.count; });
+  total = Math.min(total, MAXN);
+
+  let idx = 0;
+  entries.forEach(function(e){
+    for (let k=0;k<e.count && idx<MAXN;k++){
+      const label = e.count>1 ? e.name+" #"+(k+1) : e.name;
+      list.push({name:label, base:e.name, weight:e.weight, hue:0, body:null,
+                 cool:0, maxY:-1e9, stuck:0, rank:0, done:false});
+      idx++;
+    }
+  });
+  // 색 배분 + 출발 위치 셔플
+  const order = list.map(function(_,i){return i;});
+  for (let i=order.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; const t=order[i]; order[i]=order[j]; order[j]=t; }
+  list.forEach(function(m,i){ m.hue = Math.round((order[i]*360/Math.max(list.length,1) + order[i]*37) % 360); });
+  return {list:list, order:order};
+}
+
+function resetWorld(){
+  if (G.engine) { Composite.clear(G.engine.world, false); Engine.clear(G.engine); }
+  G.engine = Engine.create({gravity:{x:0, y:1, scale:0.0011}});
+  G.engine.positionIterations = 8;
+  G.engine.velocityIterations = 8;
+  G.marbles = []; G.finished = []; G.fx = [];
+  G.raceMs = 0; G.acc = 0; G.done = false; G.running = false; G.lastFinishMs = 0;
+}
+
+function setup(entries, mapKey){
+  resetWorld();
+  const course = buildCourse(mapKey);
+  G.course = course;
+  Composite.add(G.engine.world, course.solid);
+  Composite.add(G.engine.world, course.gate);
+  course.spin.forEach(function(s){ Composite.add(G.engine.world, s.body); });
+
+  const made = makeMarbles(entries);
+  const n = made.list.length;
+  R = n > 60 ? 7.4 : (n > 30 ? 8.5 : 9.5);   // 많을수록 작게 — 병목과 끼임을 줄인다
+  const perRow = Math.max(4, Math.min(12, Math.ceil(Math.sqrt(n*1.5))));
+  const stepX = (W - 60) / Math.max(perRow-1, 1);
+  const rowGap = 2*R + 8;
+  made.list.forEach(function(m, i){
+    const pos = made.order[i];
+    const col = pos % perRow, row = (pos / perRow)|0;
+    const x = 30 + col*stepX + (Math.random()*8-4);
+    const y = 258 - row*rowGap - Math.random()*4;
+    const b = Bodies.circle(x, y, R, {
+      restitution:0.38, friction:0.018, frictionAir:0.0021, density:0.0016, slop:0.02
+    });
+    b.plugin = {kind:"marble", m:m};
+    m.body = b; m.maxY = y;
+    m.cool = (2500 + Math.random()*4000) / m.weight;
+    G.marbles.push(m);
+    Composite.add(G.engine.world, b);
+  });
+
+  G.cam.y = 170; G.cam.view = 640;
+  G.armed = true;
+  fitCanvas();
+  interpolate();
+  camUpdate(1);
+  drawFrame();
+  renderRail();
+}
+
+/* ===================== 스텝 ===================== */
+const DT = 1000/120;   // 120Hz — 스텝당 이동량을 줄여 움직임을 매끄럽게
+
+function stepPhysics(){
+  const c = G.course;
+  const t = G.raceMs;
+
+  c.spin.forEach(function(s){
+    if (s.mode === "spin"){
+      Body.setAngularVelocity(s.body, s.speed);
+    } else {
+      const target = s.amp * Math.sin(t/ (s.period*16.7) * Math.PI*2 + s.phase);
+      Body.setAngularVelocity(s.body, target - s.body.angle);
+    }
+    Body.setPosition(s.body, s.pivot);
+    Body.setVelocity(s.body, {x:0, y:0});
+  });
+
+  // 지연 방지: 눈에 띄지 않게 아주 완만히 증가시킨다 (계단식이면 조작처럼 보인다)
+  G.engine.gravity.y = 1 + Math.min(0.55, Math.max(0, (t - 25000) / 90000));
+
+  // 보간용: 이번 스텝 직전 상태를 남긴다
+  for (let i=0;i<G.marbles.length;i++){
+    const m = G.marbles[i];
+    if (m.done) continue;
+    m.px = m.body.position.x; m.py = m.body.position.y; m.pa = m.body.angle;
+  }
+  for (let i=0;i<c.spin.length;i++) c.spin[i].pa = c.spin[i].body.angle;
+
+  Engine.update(G.engine, DT);
+  G.raceMs += DT;
+
+  for (let i=G.marbles.length-1; i>=0; i--){
+    const m = G.marbles[i];
+    if (m.done) continue;
+    const p = m.body.position;
+
+    const v = m.body.velocity, sp = Math.sqrt(v.x*v.x + v.y*v.y);
+    const lim = R + 4;
+    if (sp > lim) Body.setVelocity(m.body, {x:v.x/sp*lim, y:v.y/sp*lim});
+
+    if (p.y > c.goalY || p.y > c.height + 260){ finishMarble(m); continue; }
+
+    // 끼임 해소
+    if (p.y > m.maxY + 3){ m.maxY = p.y; m.stuck = 0; }
+    else {
+      m.stuck += DT;
+      if (m.stuck > 3000){
+        m.stuck = 1500;   // 덮어쓰지 않고 살짝 밀어준다
+        m.jog = (m.jog || 0) + 1;
+        const push = Math.min(3.2, 1.2 + m.jog * 0.35);   // 오래 갇힐수록 세게
+        const sv = m.body.velocity;
+        Body.setVelocity(m.body, {x:sv.x + (Math.random()*2-1)*push, y:sv.y - push*0.45});
+      }
+    }
+
+    // 스킬: 폭탄
+    if (G.skill){
+      m.cool -= DT;
+      if (m.cool <= 0){
+        m.cool = (3200 + Math.random()*5200) / m.weight;
+        explode(m);
+      }
+    }
+  }
+
+  for (let i=G.fx.length-1;i>=0;i--){ G.fx[i].t += DT; if (G.fx[i].t > G.fx[i].life) G.fx.splice(i,1); }
+
+  // 40초간 아무도 완주하지 못하면 남은 구슬을 현재 위치 순서로 마감한다
+  if (G.finished.length && G.raceMs - (G.lastFinishMs || 0) > 40000) forceFinishAll();
+  else if (G.raceMs > 300000) forceFinishAll();
+}
+
+function explode(src){
+  const p = src.body.position;
+  const RAD = 118;
+  G.fx.push({type:"boom", x:p.x, y:p.y, t:0, life:420, r:RAD, hue:src.hue});
+  G.marbles.forEach(function(o){
+    if (o===src || o.done) return;
+    const d = Vector.sub(o.body.position, p);
+    const len = Vector.magnitude(d) || 0.001;
+    if (len > RAD) return;
+    const k = (1 - len/RAD) * 4.5;
+    const v = o.body.velocity;
+    Body.setVelocity(o.body, {x:v.x + d.x/len*k, y:v.y + d.y/len*k - k*0.5});
+  });
+  const sv = src.body.velocity;
+  Body.setVelocity(src.body, {x:sv.x, y:sv.y + 1.5});
+  beep(90, 0.09, "square");
+}
+
+function finishMarble(m){
+  m.done = true;
+  m.finMs = G.raceMs;
+  G.lastFinishMs = G.raceMs;
+  m.rank = G.finished.length + 1;
+  G.finished.push(m);
+  G.fx.push({type:"pop", x:m.body.position.x, y:G.course.goalY, t:0, life:520, hue:m.hue});
+  Composite.remove(G.engine.world, m.body);
+  beep(520 + Math.min(m.rank,12)*40, 0.06, "sine");
+  renderRail();
+  if (!G.done && G.finished.length >= G.needed) concludeSoon();
+}
+
+function forceFinishAll(){
+  G.marbles.filter(function(m){return !m.done;})
+    .sort(function(a,b){ return b.body.position.y - a.body.position.y; })
+    .forEach(function(m){ finishMarble(m); });
+}
+
+let concludeTimer = null;
+function concludeSoon(){
+  G.done = true;
+  clearTimeout(concludeTimer);
+  concludeTimer = setTimeout(function(){ G.running = false; showResult(); }, 900);
+}
+
+/* ===================== 렌더 ===================== */
+function fitCanvas(){
+  const w = cvs.clientWidth || window.innerWidth;
+  const h = cvs.clientHeight || window.innerHeight;
+  cvs.width = Math.round(w*DPR); cvs.height = Math.round(h*DPR);
+}
+window.addEventListener("resize", function(){ fitCanvas(); drawFrame(0); });
+
+/* 물리는 고정 스텝, 화면은 그 사이를 메워 그린다.
+   이게 없으면 프레임마다 스텝 수가 1개/2개로 갈려 60fps여도 끊겨 보인다. */
+function interpolate(){
+  const a = G.running ? Math.min(1, Math.max(0, G.acc / DT)) : 1;
+  for (let i=0;i<G.marbles.length;i++){
+    const m = G.marbles[i];
+    if (m.done) continue;
+    const p = m.body.position;
+    if (m.px === undefined){ m.px = p.x; m.py = p.y; m.pa = m.body.angle; }
+    m.rx = m.px + (p.x - m.px) * a;
+    m.ry = m.py + (p.y - m.py) * a;
+    m.ra = m.pa + (m.body.angle - m.pa) * a;
+  }
+  if (G.course){
+    for (let i=0;i<G.course.spin.length;i++){
+      const sp = G.course.spin[i];
+      sp.ra = sp.pa + (sp.body.angle - sp.pa) * a;
+    }
+  }
+}
+
+function camUpdate(k){
+  if (!G.course) return;
+  const live = G.marbles.filter(function(m){return !m.done;});
+  let wantView, wantY, lead = null;
+
+  if (!live.length){
+    wantView = 620; wantY = G.course.goalY - 120;
+  } else if (!G.running){
+    // 출발 대기: 대기열 전체가 보이도록
+    let lo = Infinity, hi = -Infinity;
+    live.forEach(function(m){ const y=m.ry; if(y<lo)lo=y; if(y>hi)hi=y; });
+    wantView = Math.max(520, (hi-lo) + 280);
+    wantY = (lo+hi)/2 + 40;
+  } else {
+    // 레이스 중: 선두 경쟁 구간만 클로즈업한다.
+    // 전체가 아니라 상위 PACK명의 간격으로만 시야를 정한다.
+    const ys = live.map(function(m){ return m.ry; }).sort(function(a,b){ return b-a; });
+    lead = ys[0];
+    const PACK = Math.min(ys.length, 4);
+    const spread = lead - ys[PACK-1];
+    wantView = Math.max(340, Math.min(700, spread*1.9 + 320));
+    wantY = lead + wantView*0.12;   // 선두를 화면 위쪽 38%에 두고 앞길을 보여준다
+  }
+
+  // 선두가 화면 밖으로 밀릴수록 따라가는 강도만 올린다 (끊어 붙이면 튀어 보인다)
+  let ky = k;
+  if (lead !== null){
+    const off = Math.abs((lead - G.cam.y) / G.cam.view);
+    if (off > 0.28) ky = Math.min(0.5, k + (off - 0.28) * 2.2);
+  }
+  G.cam.view += (wantView - G.cam.view) * k * 0.55;   // 줌은 더 천천히
+  G.cam.y += (wantY - G.cam.y) * ky;
+
+  const cw = cvs.width/DPR, ch = cvs.height/DPR;
+  const narrow = cw < 760;
+  let left = 14, right = 14, sy = ch/2;
+  if (narrow){
+    const ph = document.getElementById("panel").getBoundingClientRect().height || 0;
+    sy = Math.max(ch*0.32, (ch - ph)/2);
+  } else {
+    left = document.getElementById("panel").getBoundingClientRect().right + 18;
+    right = 248;
+  }
+  const availW = Math.max(230, cw - left - right);
+  const s = Math.min(ch/G.cam.view, availW/(W+44), 2.6);
+  G.cam.scale = s;
+  G.cam.sx = narrow ? cw/2 : left + availW/2;
+  G.cam.sy = sy;
+}
+function toScreen(x,y){
+  return {x:G.cam.sx + (x - W/2)*G.cam.scale, y:G.cam.sy + (y - G.cam.y)*G.cam.scale};
+}
+
+function polyPath(body){
+  const v = body.vertices;
+  ctx.beginPath();
+  ctx.moveTo(v[0].x, v[0].y);
+  for (let i=1;i<v.length;i++) ctx.lineTo(v[i].x, v[i].y);
+  ctx.closePath();
+}
+function drawBody(b){
+  const k = b.plugin ? b.plugin.kind : "wall";
+  if (k === "pin" || k === "hub" || k === "bump"){
+    ctx.beginPath();
+    ctx.arc(b.position.x, b.position.y, b.circleRadius || b.plugin.r || 8, 0, Math.PI*2);
+    if (k === "bump"){
+      ctx.fillStyle = COL.bump; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = COL.ground; ctx.stroke();
+    } else {
+      ctx.fillStyle = k === "hub" ? COL.spin : COL.pin; ctx.fill();
+    }
+    return;
+  }
+  ctx.fillStyle = (k==="blade"||k==="bar") ? COL.spin : COL.track;
+  ctx.strokeStyle = COL.edge; ctx.lineWidth = 1.5; ctx.lineJoin = "round";
+  if (b.parts && b.parts.length > 1){
+    for (let i=1;i<b.parts.length;i++){ polyPath(b.parts[i]); ctx.fill(); ctx.stroke(); }
+  } else { polyPath(b); ctx.fill(); if (k!=="edge") ctx.stroke(); }
+}
+
+function drawFrame(){
+  const cw = cvs.width/DPR, ch = cvs.height/DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  const g = ctx.createLinearGradient(0,0,0,ch);
+  g.addColorStop(0, COL.ground2); g.addColorStop(1, COL.ground);
+  ctx.fillStyle = g; ctx.fillRect(0,0,cw,ch);
+  if (!G.course) return;
+
+  // 현재 순위: 완주자 수 + 남은 구슬의 y 순서
+  const liveSorted = [];
+  G.marbles.forEach(function(m){ if (!m.done) liveSorted.push(m); });
+  liveSorted.sort(function(a,b){ return b.ry - a.ry; });
+  const finN = G.finished.length;
+  liveSorted.forEach(function(m,i){ m.live = finN + i + 1; });
+
+  const c = G.course, s = G.cam.scale;
+  const half = (ch/2)/s + 90;
+  const y0 = G.cam.y - half, y1 = G.cam.y + half;
+
+  ctx.save();
+  ctx.translate(G.cam.sx, G.cam.sy);
+  ctx.scale(s, s);
+  ctx.translate(-W/2, -G.cam.y);
+
+  // 코스 바닥면
+  ctx.fillStyle = COL.ground2;
+  ctx.fillRect(0, -220, W, c.height + 440);
+  ctx.strokeStyle = COL.edge; ctx.lineWidth = 2/s;
+  ctx.beginPath();
+  ctx.moveTo(0.5, -220); ctx.lineTo(0.5, c.height + 220);
+  ctx.moveTo(W-0.5, -220); ctx.lineTo(W-0.5, c.height + 220);
+  ctx.stroke();
+
+  // 깊이 눈금
+  ctx.strokeStyle = COL.grid; ctx.lineWidth = 1/s;
+  const gstep = 100;
+  for (let y = Math.floor(y0/gstep)*gstep; y < y1; y += gstep){
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  c.solid.forEach(function(b){
+    if (b.bounds.max.y < y0 || b.bounds.min.y > y1) return;
+    drawBody(b);
+  });
+  if (G.armed && !G.running && !G.done) drawBody(c.gate);
+  c.spin.forEach(function(sp){
+    if (sp.body.bounds.max.y < y0 || sp.body.bounds.min.y > y1) return;
+    ctx.save();
+    ctx.translate(sp.pivot.x, sp.pivot.y); ctx.rotate(sp.ra);
+    ctx.fillStyle = COL.spin; ctx.strokeStyle = COL.edge; ctx.lineWidth = 1.5; ctx.lineJoin = "round";
+    sp.blades.forEach(function(b){
+      ctx.save(); ctx.rotate(b.off);
+      ctx.beginPath(); ctx.rect(-b.len/2, -b.thick/2, b.len, b.thick);
+      ctx.fill(); ctx.stroke(); ctx.restore();
+    });
+    ctx.restore();
+  });
+
+  // 결승선
+  if (c.goalY > y0 - 200 && c.goalY < y1 + 200){
+    ctx.save();
+    ctx.strokeStyle = COL.gold; ctx.lineWidth = 4/s; ctx.setLineDash([14/s, 10/s]);
+    ctx.beginPath(); ctx.moveTo(0, c.goalY); ctx.lineTo(W, c.goalY); ctx.stroke();
+    ctx.restore();
+  }
+
+  // 이펙트
+  G.fx.forEach(function(f){
+    const p = f.t/f.life;
+    ctx.save();
+    if (f.type === "boom"){
+      ctx.globalAlpha = (1-p)*0.85;
+      ctx.strokeStyle = "hsl("+f.hue+" 90% 62%)"; ctx.lineWidth = 5/s*(1-p)+1/s;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r*(0.25+p*0.85), 0, Math.PI*2); ctx.stroke();
+    } else {
+      ctx.globalAlpha = (1-p);
+      ctx.fillStyle = "hsl("+f.hue+" 85% 60%)";
+      ctx.beginPath(); ctx.arc(f.x, f.y, R*(1+p*2.4), 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  });
+
+  // 구슬
+  G.marbles.forEach(function(m){
+    if (m.done) return;
+    if (m.ry < y0-40 || m.ry > y1+40) return;
+    ctx.save();
+    ctx.translate(m.rx, m.ry); ctx.rotate(m.ra);
+    const grad = ctx.createRadialGradient(-R*0.35,-R*0.4,R*0.15, 0,0,R*1.15);
+    grad.addColorStop(0, "hsl("+m.hue+" 95% 74%)");
+    grad.addColorStop(1, "hsl("+m.hue+" 78% 44%)");
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(0,0,R,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle = "hsl("+m.hue+" 60% 28%)"; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.fillStyle = "hsla(0 0% 100% / .55)";
+    ctx.beginPath(); ctx.arc(-R*0.3, -R*0.34, R*0.28, 0, Math.PI*2); ctx.fill();
+    if (m.live === 1){          // 선두 표시
+      ctx.strokeStyle = COL.gold; ctx.lineWidth = 2.6;
+      ctx.beginPath(); ctx.arc(0, 0, R+4, 0, Math.PI*2); ctx.stroke();
+    }
+    ctx.restore();
+  });
+  ctx.restore();
+
+  // 이름표(화면 좌표)
+  if (s > 0.42){
+    const fs = Math.max(10, Math.min(15, 11*Math.max(s,1)));
+    ctx.font = "700 "+fs+"px "+"'Noto Sans KR',sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    // 순위가 높은 구슬부터 그리고, 이미 놓인 이름표와 겹치면 건너뛴다
+    const placed = [];
+    for (let i = 0; i < liveSorted.length && i < 28; i++){
+      const m = liveSorted[i];
+      const sp = toScreen(m.rx, m.ry);
+      if (sp.y < -20 || sp.y > ch+20) continue;
+      const txt = m.live + "  " + m.name;
+      const tw = ctx.measureText(txt).width;
+      const bx = sp.x - tw/2, by = sp.y - R*s - 4;
+      let hit = false;
+      for (let j = 0; j < placed.length; j++){
+        const r = placed[j];
+        if (bx < r.x1 && bx + tw > r.x0 && by - fs < r.y1 && by > r.y0){ hit = true; break; }
+      }
+      if (hit) continue;
+      placed.push({x0:bx, x1:bx+tw, y0:by-fs, y1:by});
+      ctx.lineWidth = 3.5; ctx.strokeStyle = COL.ground;
+      ctx.strokeText(txt, sp.x, by);
+      ctx.fillStyle = m.live === 1 ? COL.gold : "hsl("+m.hue+" 80% "+(isDark()?"70%":"36%")+")";
+      ctx.fillText(txt, sp.x, by);
+    }
+  }
+
+  // 결승선 라벨
+  const gp = toScreen(W/2, G.course.goalY);
+  if (gp.y > -30 && gp.y < ch+30){
+    ctx.font = "700 11px 'Roboto Mono',monospace";
+    ctx.fillStyle = COL.gold; ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.fillText("결승선", gp.x, gp.y + 8);
+  }
+}
+function isDark(){
+  const t = document.documentElement.getAttribute("data-theme");
+  if (t) return t === "dark";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+/* ===================== 루프 ===================== */
+function loop(ts){
+  requestAnimationFrame(loop);
+  const dt = Math.min(64, ts - (G.last||ts));
+  G.last = ts;
+  if (G.running){
+    // 고정 시간간격이라 배속은 재생속도만 바꿀 뿐 결과에는 영향이 없다.
+    // 자동 가속은 넣지 않는다 — 속도가 저 혼자 변하면 조작처럼 보인다.
+    const mult = G.ff ? 6 : G.speed;
+    G.acc += dt * mult;
+    let n = 0;
+    while (G.acc >= DT && n < 28){ stepPhysics(); G.acc -= DT; n++; }
+    if (G.acc > DT*28) G.acc = 0;
+  }
+  interpolate();
+  camUpdate(G.running ? 0.12 : 0.18);
+  drawFrame();
+}
+requestAnimationFrame(loop);
+
+/* ===================== 사운드 ===================== */
+let actx = null;
+function beep(freq, dur, type){
+  if (!G.sound) return;
+  try{
+    if (!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type||"sine"; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.06, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
+    o.connect(g); g.connect(actx.destination);
+    o.start(); o.stop(actx.currentTime + dur);
+  }catch(e){}
+}
+function fanfare(){
+  if (!G.sound) return;
+  [523,659,784,1047].forEach(function(f,i){ setTimeout(function(){ beep(f,0.18,"triangle"); }, i*110); });
+}
+
+/* ===================== UI ===================== */
+const el = function(id){ return document.getElementById(id); };
+const ui = {
+  names:el("roster"), map:el("map"), speed:el("speed"), start:el("btnStart"), shuffle:el("btnShuffle"),
+  seg:el("modeSeg"), rankRow:el("rankRow"), rankA:el("rankA"), rankB:el("rankB"),
+  rankSep:el("rankSep"), rankLabel:el("rankLabel"), skill:el("chkSkill"), sound:el("chkSound"),
+  panel:el("panel"), fold:el("btnFold"), theme:el("btnTheme"),
+  rail:el("rail"), railHead:el("railHead"), rankList:el("rankList"),
+  banner:el("banner"), who:el("bannerWho"), sub:el("bannerSub"), kicker:el("bannerKicker"),
+  again:el("btnAgain"), close:el("btnClose"), count:el("count"), countNum:el("countNum"),
+  ff:el("btnFF"), cnt:el("cntHint"), copy:el("btnCopy"), xlsx:el("btnXlsx"), resultList:el("resultList"),
+  card:document.querySelector("#banner .card")
+};
+
+MAPS.forEach(function(m){
+  const o = document.createElement("option");
+  o.value = m.key; o.textContent = m.name; ui.map.appendChild(o);
+});
+
+let MODE = "all";
+ui.seg.addEventListener("click", function(e){
+  const b = e.target.closest("button[data-mode]");
+  if (!b) return;
+  MODE = b.dataset.mode;
+  Array.prototype.forEach.call(ui.seg.children, function(x){
+    x.setAttribute("aria-pressed", String(x === b));
+  });
+  const showRow = MODE === "rank" || MODE === "range";
+  ui.rankRow.style.display = showRow ? "flex" : "none";
+  ui.rankSep.hidden = MODE !== "range";
+  ui.rankB.hidden = MODE !== "range";
+  ui.rankLabel.textContent = MODE === "range" ? "등수 범위" : "등수";
+});
+
+ui.ff.addEventListener("click", function(){
+  G.ff = !G.ff;
+  ui.ff.style.background = G.ff ? "var(--gold)" : "";
+  ui.ff.style.color = G.ff ? "var(--gold-ink)" : "";
+  ui.ff.style.borderColor = G.ff ? "transparent" : "";
+});
+
+ui.fold.addEventListener("click", function(){
+  const min = ui.panel.classList.toggle("min");
+  ui.fold.textContent = min ? "▴" : "▾";
+});
+ui.theme.addEventListener("click", function(){
+  const next = isDark() ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  COL = themeColors();
+  drawFrame();
+});
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function(){
+  COL = themeColors(); drawFrame();
+});
+
+// 기본 명단은 DOM이 아니라 상수로 들고 있는다
+// (플랫폼이 재배포 시 입력값을 이어받아 덮어쓸 수 있기 때문)
+const SAMPLE100 = "김서연, 이하준, 박은우, 최우진, 정예은, 강재원, 조아린, 윤윤아, 장지안, 임수현, 한찬우, 오도하, 서이현, 신태경, 권성현, 황시우, 안지아, 송건우, 전서진, 홍민준, 고세아, 문규민, 양태오, 손정우, 배아율, 백윤서, 허다올, 유상우, 남우주, 심예준, 노수아, 하시윤, 곽현우, 성지윤, 차다인, 주지환, 우가윤, 구하영, 민민규, 진별하, 김다올, 이상우, 박우주, 최예준, 정수아, 강시윤, 조현우, 윤지윤, 장다인, 임지환, 한가윤, 오하영, 서민규, 신별하, 권준호, 황여진, 안라온, 송서준, 전민서, 홍소율, 고준서, 문하은, 양소은, 손동현, 배현서, 백예린, 허지성, 유주하, 남가온, 심유찬, 노현진, 하도윤, 곽유진, 성지민, 차지우, 주수빈, 우유나, 구준혁, 민민재, 진준영, 김지성, 이주하, 박가온, 최유찬, 정현진, 강도윤, 조유진, 윤지민, 장지우, 임수빈, 한유나, 오준혁, 서민재, 신준영, 권서율, 황시온, 안희원, 송재이, 전연서, 홍하윤";
+
+el("btnSample").addEventListener("click", function(){
+  ui.names.value = SAMPLE100;
+  updateCount(); save();
+  setup(parseEntries(ui.names.value), ui.map.value);
+});
+
+ui.shuffle.addEventListener("click", function(){
+  const parts = ui.names.value.split(/[,\n\r]+/).map(function(s){return s.trim();}).filter(Boolean);
+  for (let i=parts.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; const t=parts[i]; parts[i]=parts[j]; parts[j]=t; }
+  ui.names.value = parts.join(", ");
+  save();
+});
+
+ui.skill.addEventListener("change", function(){ G.skill = ui.skill.checked; save(); });
+ui.sound.addEventListener("change", function(){ G.sound = ui.sound.checked; save(); });
+ui.map.addEventListener("change", save);
+ui.speed.addEventListener("change", function(){ G.speed = parseFloat(ui.speed.value); save(); });
+ui.names.addEventListener("input", function(){ save(); updateCount(); });
+
+function updateCount(){
+  const es = parseEntries(ui.names.value);
+  let t = 0; es.forEach(function(e){ t += e.count; });
+  ui.cnt.textContent = "총 " + t + "개" + (t > MAXN ? " (최대 " + MAXN + "개까지 굴림)" : "");
+}
+
+function save(){
+  try{
+    localStorage.setItem("gs-race-v2", JSON.stringify({
+      names:ui.names.value, map:ui.map.value, speed:ui.speed.value,
+      skill:ui.skill.checked, sound:ui.sound.checked, mode:MODE,
+      a:ui.rankA.value, b:ui.rankB.value,
+      theme:document.documentElement.getAttribute("data-theme")
+    }));
+  }catch(e){}
+}
+function restore(){
+  let d = null;
+  try{ d = JSON.parse(localStorage.getItem("gs-race-v2")||"null"); }catch(e){}
+  if (!d) return;
+  if (d.names) ui.names.value = d.names;
+  if (d.map) ui.map.value = d.map;
+  if (d.speed) ui.speed.value = d.speed;
+  ui.skill.checked = !!d.skill;
+  ui.sound.checked = !!d.sound;
+  if (d.a) ui.rankA.value = d.a;
+  if (d.b) ui.rankB.value = d.b;
+  if (d.theme) document.documentElement.setAttribute("data-theme", d.theme);
+  if (d.mode){
+    const b = ui.seg.querySelector('[data-mode="'+d.mode+'"]');
+    if (b) b.click();
+  }
+}
+
+/* 순위 레일 */
+function renderRail(){
+  const total = G.marbles.length;
+  if (!total){ ui.rail.hidden = true; return; }
+  ui.rail.hidden = false;
+  ui.railHead.textContent = G.finished.length + " / " + total;
+  const winners = winnerRanks(total);
+  const rows = G.finished.slice(-14).reverse().map(function(m){
+    const win = winners.indexOf(m.rank) >= 0;
+    return '<div class="rank'+(win?" win":"")+'">'
+      + '<span class="n">'+m.rank+'</span>'
+      + '<span class="nm">'+esc(m.name)+'</span>'
+      + '<span class="dot" style="background:hsl('+m.hue+' 82% 58%)"></span></div>';
+  });
+  if (!rows.length) rows.push('<div class="rank fade"><span class="nm">출발 준비</span></div>');
+  ui.rankList.innerHTML = rows.join("");
+}
+function esc(s){ return s.replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+function winnerRanks(total){
+  const a = Math.max(1, parseInt(ui.rankA.value,10)||1);
+  const b = Math.max(a, parseInt(ui.rankB.value,10)||a);
+  if (MODE === "all") return [1,2,3].filter(function(r){ return r <= total; });
+  if (MODE === "first") return [1];
+  if (MODE === "last") return [total];
+  if (MODE === "rank") return [Math.min(a, total)];
+  const out = [];
+  for (let i=Math.min(a,total); i<=Math.min(b,total); i++) out.push(i);
+  return out;
+}
+function neededCount(total){
+  if (MODE === "all" || MODE === "last") return total;   // 전원 완주까지 진행
+  const r = winnerRanks(total);
+  return Math.min(total, Math.max.apply(null, r));
+}
+
+/* 시작 */
+function start(){
+  const entries = parseEntries(ui.names.value);
+  let total = 0; entries.forEach(function(e){ total += e.count; });
+  if (total < 2){ flash("참가자를 2명 이상 입력해 주세요"); return; }
+  if (total > MAXN) flash("최대 " + MAXN + "개까지만 굴립니다");
+
+  G.skill = ui.skill.checked; G.sound = ui.sound.checked; G.speed = parseFloat(ui.speed.value);
+  MODE = MODE || "first"; G.mode = MODE;
+  ui.banner.classList.remove("on");
+  setup(entries, ui.map.value);
+  G.needed = neededCount(G.marbles.length);
+  ui.panel.classList.add("min"); ui.fold.textContent = "▴";
+  ui.start.disabled = true;
+
+  let n = 3;
+  ui.count.classList.add("on"); ui.countNum.textContent = n;
+  beep(440,0.08,"triangle");
+  const tick = setInterval(function(){
+    n--;
+    if (n > 0){ ui.countNum.textContent = n; beep(440,0.08,"triangle"); }
+    else{
+      clearInterval(tick);
+      ui.countNum.textContent = "GO";
+      beep(880,0.16,"triangle");
+      setTimeout(function(){ ui.count.classList.remove("on"); }, 420);
+      Composite.remove(G.engine.world, G.course.gate);
+      G.marbles.forEach(function(m){
+        Body.setVelocity(m.body, {x:(Math.random()*2-1)*0.8, y:0.3});
+      });
+      G.armed = false; G.running = true; G.last = 0;
+      ui.ff.hidden = false;
+      ui.start.disabled = false; ui.start.textContent = "다시";
+    }
+  }, 650);
+}
+
+function showResult(){
+  const total = G.marbles.length;
+  const full = MODE === "all";
+  ui.card.classList.toggle("wide", full);
+  ui.resultList.hidden = !full;
+  ui.copy.hidden = !full;
+  ui.xlsx.hidden = !full;
+
+  if (full){
+    if (!G.finished.length) return;
+    ui.kicker.textContent = "전체 순위";
+    ui.who.innerHTML = '<span class="line">1등 ' + esc(G.finished[0].name) + '</span>';
+    ui.resultList.innerHTML = G.finished.map(function(m){
+      return '<li class="res' + (m.rank <= 3 ? " top" : "") + '">'
+        + '<span class="n">' + m.rank + '</span>'
+        + '<span class="dot" style="background:hsl(' + m.hue + ' 82% 58%)"></span>'
+        + '<span class="nm">' + esc(m.name) + '</span></li>';
+    }).join("");
+  } else {
+    const ranks = winnerRanks(total);
+    const names = ranks.map(function(r){
+      const m = G.finished[r-1];
+      return m ? m.name : null;
+    }).filter(Boolean);
+    if (!names.length) return;
+    ui.kicker.textContent = MODE === "last" ? "꼴찌 당첨"
+      : (ranks.length > 1 ? ranks[0]+"~"+ranks[ranks.length-1]+"등 당첨" : ranks[0]+"등 당첨");
+    ui.who.innerHTML = names.map(function(n){ return '<span class="line">'+esc(n)+'</span>'; }).join("");
+    ui.resultList.innerHTML = "";
+  }
+  ui.sub.textContent = G.course.mapName + " 코스 · 참가 " + total + "개 · " + (G.raceMs/1000).toFixed(1) + "초";
+  ui.banner.classList.add("on");
+  ui.ff.hidden = true; G.ff = false; ui.ff.style.background = ""; ui.ff.style.color = ""; ui.ff.style.borderColor = "";
+  fanfare();
+  renderRail();
+}
+
+function copyText(text, btn){
+  const done = function(ok){
+    const old = btn.textContent;
+    btn.textContent = ok ? "복사됨" : "복사 실패";
+    setTimeout(function(){ btn.textContent = old; }, 1500);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){ done(true); }, function(){ fallback(); });
+  } else fallback();
+  function fallback(){
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.top = "-1000px";
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch(e){}
+    ta.remove(); done(ok);
+  }
+}
+
+/* 엑셀: 라이브러리가 900KB라 누를 때만 불러온다 */
+function ensureXLSX(cb){
+  if (window.XLSX) return cb(true);
+  const sc = document.createElement("script");
+  sc.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+  sc.onload = function(){ cb(!!window.XLSX); };
+  sc.onerror = function(){ cb(false); };
+  document.head.appendChild(sc);
+}
+function stamp(){
+  const d = new Date(), z = function(n){ return String(n).padStart(2,"0"); };
+  return d.getFullYear() + z(d.getMonth()+1) + z(d.getDate()) + "_" + z(d.getHours()) + z(d.getMinutes());
+}
+function saveBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+}
+function downloadCsv(){          // 라이브러리를 못 받을 때 대비
+  const rows = [["등수","이름"]].concat(G.finished.map(function(m){ return [m.rank, m.name]; }));
+  const csv = rows.map(function(r){
+    return r.map(function(v){ return '"' + String(v).replace(/"/g,'""') + '"'; }).join(",");
+  }).join("\r\n");
+  saveBlob(new Blob(["\uFEFF" + csv], {type:"text/csv;charset=utf-8"}),
+           "구슬레이스_순위_" + stamp() + ".csv");
+}
+ui.xlsx.addEventListener("click", function(){
+  if (!G.finished.length) return;
+  const btn = ui.xlsx, old = "엑셀 받기";
+  btn.disabled = true; btn.textContent = "준비 중…";
+  ensureXLSX(function(ok){
+    try{
+      if (ok){
+        const aoa = [["등수","이름"]].concat(G.finished.map(function(m){ return [m.rank, m.name]; }));
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        ws["!cols"] = [{wch:6},{wch:24}];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "순위");
+        XLSX.writeFile(wb, "구슬레이스_순위_" + stamp() + ".xlsx");
+      } else downloadCsv();
+      btn.textContent = "받는 중…";
+      // 미리보기(iframe)에서는 브라우저가 다운로드를 막는다
+      setTimeout(function(){
+        btn.disabled = false;
+        btn.textContent = (window.self !== window.top) ? "안 받아지면 복사" : old;
+        setTimeout(function(){ btn.textContent = old; }, 3000);
+      }, 900);
+    }catch(e){
+      btn.disabled = false; btn.textContent = "실패 — 복사 쓰기";
+      setTimeout(function(){ btn.textContent = old; }, 2500);
+    }
+  });
+});
+
+ui.copy.addEventListener("click", function(){
+  copyText(G.finished.map(function(m){ return m.rank + "\t" + m.name; }).join("\n"), ui.copy);
+});
+
+ui.start.addEventListener("click", start);
+ui.again.addEventListener("click", function(){ ui.banner.classList.remove("on"); start(); });
+ui.close.addEventListener("click", function(){
+  ui.banner.classList.remove("on");
+  ui.panel.classList.remove("min"); ui.fold.textContent = "▾";
+});
+document.addEventListener("keydown", function(e){
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { start(); }
+  if (e.key === "Escape") ui.banner.classList.remove("on");
+});
+
+function flash(msg){
+  ui.card.classList.remove("wide");
+  ui.resultList.hidden = true; ui.copy.hidden = true; ui.xlsx.hidden = true;
+  ui.kicker.textContent = "알림";
+  ui.who.innerHTML = '<span class="line" style="font-size:22px">'+esc(msg)+'</span>';
+  ui.sub.textContent = "";
+  ui.banner.classList.add("on");
+  setTimeout(function(){ ui.banner.classList.remove("on"); }, 1600);
+}
+
+window.__race = G;   // 디버그용 핸들
+G.buildCourse = buildCourse; G.MAPS = MAPS;
+
+/* 초기화 */
+restore();
+// 저장값도 없고 입력창이 비었거나 이어받은 값이면 기본 명단을 복원
+try {
+  if (!localStorage.getItem("gs-race-v2") && ui.names.value.trim().split(/[,\n\r]+/).filter(Boolean).length < 100) {
+    ui.names.value = SAMPLE100;
+  }
+} catch(e){ ui.names.value = SAMPLE100; }
+COL = themeColors();
+fitCanvas();
+G.skill = ui.skill.checked; G.sound = ui.sound.checked; G.speed = parseFloat(ui.speed.value);
+setup(parseEntries(ui.names.value), ui.map.value);
+updateCount();
+G.armed = true;
+})();
+</script>
