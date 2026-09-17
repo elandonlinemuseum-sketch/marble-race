@@ -354,6 +354,17 @@ function bladeCross(cx, cy, len, n){
   }
   return {parts:parts, blades:blades};
 }
+/* 십자 게이트: 긴 날개는 벽까지 닿아 완전히 막고,
+   직각으로 붙은 짧은 날개는 옆을 열어둔다.
+   양쪽 다 벽까지 닿으면 구슬이 영영 갇혀 나오지 못한다. */
+function crossGate(cx, cy, longLen, shortLen, thick){
+  return {
+    parts: [Bodies.rectangle(cx, cy, longLen, thick),
+            Bodies.rectangle(cx, cy, shortLen, thick, {angle: Math.PI/2})],
+    blades: [{len:longLen, thick:thick, off:0},
+             {len:shortLen, thick:thick, off:Math.PI/2}]
+  };
+}
 function barGeo(cx, cy, len, thick){
   return {parts:[Bodies.rectangle(cx,cy,len,thick)], blades:[{len:len, thick:thick, off:0}]};
 }
@@ -485,19 +496,43 @@ function buildCourse(mapKey){
     for (let x=32+off; x<=W-28; x+=64) c.solid.push(disc(x, y, 8, "pin"));
   }
 
-  const GATE = 52, ga = 0.60;                  // 통로 52px (구슬 14.8px)
-  const gInner = (W - GATE)/2;
+  /* 십자 회전문 + 아래 통로.
+     날개 끝과 옆벽 사이가 2px라 옆으로는 절대 빠져나갈 수 없다.
+     구슬은 십자 칸에 실려 돌아간 뒤에야 아래 통로로 떨어진다. */
+  /* 십자 회전 관문 + 아래 좁은 통로.
+     막대가 통로보다 1.7배 커서 가로로 누우면 통로를 크게 덮어 완전히 막는다.
+     직각으로 붙은 짧은 날개는 옆을 22px 열어둬, 마지막 한 개가 영영 갇히지 않게 한다. */
+  const CH = 50;                    // 십자실 반폭
+  const CORR = 56;                  // 아래 통로 폭
+  const CY = bodyEnd + 350;         // 십자 중심
+
+  // 깔때기 → 십자실 입구
+  const MOUTH = 84, ga = 0.60;
+  const gInner = (W - MOUTH)/2;
   const gL = (gInner + 14)/Math.cos(ga);
   const gcx = (gInner - 14)/2;
-  const gy  = bodyEnd + 300;                   // 깔때기 중심
+  const gy = CY - 140;
   c.solid.push(rect(gcx, gy, gL, 16,  ga, "ramp"));
   c.solid.push(rect(W-gcx, gy, gL, 16, -ga, "ramp"));
 
-  const gLip = gy + (gL/2)*Math.sin(ga);       // 통로 입구
-  // 차단봉: 가로면 통로를 10px씩 덮어 차단, 세로면 옆 20px로 통과
-  c.spin.push(spinner(W/2, gLip + 12, barGeo(W/2, gLip + 12, 72, 12), 0.030, "blade"));
+  // 십자실 옆벽 — 긴 날개 끝에서 2px
+  c.solid.push(rect(W/2 - CH - 6, CY - 5, 12, 130, 0, "ramp"));
+  c.solid.push(rect(W/2 + CH + 6, CY - 5, 12, 130, 0, "ramp"));
 
-  const goalY = gLip + 62;                     // 봉 바로 아래가 결승선
+  // 십자 관문
+  c.spin.push(spinner(W/2, CY, crossGate(W/2, CY, 2*CH - 4, CORR, 12), 0.030, "blade"));
+
+  // 어깨: 십자실 → 통로를 비스듬히 잇는다 (평평한 턱이면 구슬이 얹혀 갇힌다)
+  const shA = Math.atan2(37, CH - CORR/2);
+  const shL = Math.hypot(CH - CORR/2, 37) + 14;
+  c.solid.push(rect(W/2 - (CH + CORR/2)/2, CY + 76, shL, 14,  shA, "ramp"));
+  c.solid.push(rect(W/2 + (CH + CORR/2)/2, CY + 76, shL, 14, -shA, "ramp"));
+
+  // 통로 → 결승선
+  c.solid.push(rect(W/2 - CORR/2 - 6, CY + 150, 12, 120, 0, "ramp"));
+  c.solid.push(rect(W/2 + CORR/2 + 6, CY + 150, 12, 120, 0, "ramp"));
+
+  const goalY = CY + 210;
   const height = goalY + 160;
 
   // 좌우 외벽
@@ -666,7 +701,7 @@ function stepPhysics(){
       if (m.stuck > 3000){
         m.stuck = 1500;   // 덮어쓰지 않고 살짝 밀어준다
         m.jog = (m.jog || 0) + 1;
-        const push = Math.min(3.2, 1.2 + m.jog * 0.35);   // 오래 갇힐수록 세게
+        const push = Math.min(5.5, 1.2 + m.jog * 0.5);    // 오래 갇힐수록 세게
         const sv = m.body.velocity;
         Body.setVelocity(m.body, {x:sv.x + (Math.random()*2-1)*push, y:sv.y - push*0.45});
       }
