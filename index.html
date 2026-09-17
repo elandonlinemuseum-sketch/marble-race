@@ -139,6 +139,19 @@ select,input[type=number]{width:100%;box-sizing:border-box;padding:8px 10px;bord
 .card .actions{gap:8px;flex-wrap:wrap}
 .card.wide{width:min(760px,calc(100vw - 32px));text-align:left}
 .card.wide .kicker,.card.wide .who,.card.wide .sub{text-align:center}
+.podium{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+  gap:8px;margin:16px 0 14px;min-height:190px}
+.pod{display:flex;align-items:baseline;gap:12px;opacity:0;
+  animation:podIn .5s cubic-bezier(.2,1.2,.4,1) forwards}
+.pod .r{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.22em;
+  color:var(--ink-faint);min-width:42px;text-align:right}
+.pod .n{font-family:var(--display);font-size:27px;line-height:1.1;color:var(--ink);word-break:keep-all}
+.pod.win .r{color:var(--gold)}
+.pod.win .n{font-size:clamp(36px,8vw,58px);color:var(--gold)}
+@keyframes podIn{from{opacity:0;transform:translateY(14px) scale(.94)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){ .pod{animation:none;opacity:1} }
+.skiphint{font-size:11px;color:var(--ink-faint);letter-spacing:.04em;margin-bottom:10px}
+
 .result-list{list-style:none;margin:0 0 18px;padding:4px;display:grid;
   grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:1px 12px;
   max-height:min(46vh,340px);overflow:auto;border-top:1px solid var(--panel-line);
@@ -168,7 +181,7 @@ select,input[type=number]{width:100%;box-sizing:border-box;padding:8px 10px;bord
   text-shadow:0 0 18px var(--ground),0 0 38px var(--ground),0 6px 30px var(--ground)}
 @media (prefers-reduced-motion:no-preference){
   .flash.on .box{animation:flashIn 1.7s ease-out forwards}
-  .banner.on .result-list{animation:listIn .5s ease-out .5s backwards}
+  .banner.on .result-list{animation:listIn .45s ease-out backwards}
 }
 @keyframes flashIn{
   0%{opacity:0;transform:translateY(-7vh) scale(.8)}
@@ -270,6 +283,8 @@ select,input[type=number]{width:100%;box-sizing:border-box;padding:8px 10px;bord
   <div class="card">
     <div class="kicker" id="bannerKicker">당첨</div>
     <div class="who" id="bannerWho"></div>
+    <div class="podium" id="podium" hidden></div>
+    <div class="skiphint" id="skipHint" hidden>아무 곳이나 누르면 전체 순위</div>
     <div class="sub" id="bannerSub"></div>
     <ol class="result-list" id="resultList" hidden></ol>
     <div class="actions">
@@ -407,12 +422,6 @@ const SECTIONS = {
     c.solid.push(rect(cx, y0+430, L2, 16,  a2, "ramp"));
     c.solid.push(rect(W-cx, y0+430, L2, 16, -a2, "ramp"));
 
-    /* 차단 막대기: 출구 바로 아래에서 돈다.
-       가로로 누우면 출구를 양쪽 10px씩 덮어 완전히 막고,
-       세로로 서면 옆으로 22px씩 열려 구슬이 빠져나간다. */
-    const lipY = y0 + 430 + (L2/2)*Math.sin(a2);
-    c.spin.push(spinner(W/2, lipY + 12, barGeo(W/2, lipY + 12, 76, 12), 0.018, "blade"));
-
     // 교반기: 대기 중인 구슬을 계속 휘저어 순서를 흐트러뜨린다
     c.spin.push(spinner(W/2, y0+300, bladeCross(W/2, y0+300, 210, 3), 0.009, "blade"));
     c.solid.push(disc(58, y0+230, 16, "bump"));
@@ -467,21 +476,29 @@ function buildCourse(mapKey){
 
   const bodyEnd = top + plan.length*SH;
 
-  /* 마무리 주로.
-     좁은 출구를 두면 결승선도 한 줄로 띄엄띄엄 통과해 접전이 안 난다.
-     폭 전체를 쓰는 핀밭으로 통과 시간을 흩어, 앞뒤 간격을 뭉개고
-     마지막까지 순위가 뒤집히게 한다. (직전 구간이 웅덩이라 이미 뭉쳐 있다) */
-  for (let r=0;r<6;r++){
-    const y = bodyEnd + 70 + r*78, off = (r%2)*32;
+  /* 결승 관문.
+     결승선 바로 위를 좁은 통로로 만들고 회전 차단봉이 가로막는다.
+     구슬은 선 코앞에 몰려 대기하고, 봉이 세로로 설 때만 통과한다.
+     봉이 선과 붙어 있어야 열린 순간 여러 개가 거의 동시에 들어온다. */
+  for (let r=0;r<3;r++){                       // 먼저 흩어 놓는다
+    const y = bodyEnd + 60 + r*80, off = (r%2)*32;
     for (let x=32+off; x<=W-28; x+=64) c.solid.push(disc(x, y, 8, "pin"));
   }
-  // 마지막 갈림: 나란히 내려온 구슬을 한 번 더 흩는다
-  tent(c, W*0.28, bodyEnd+556, 150, 13);
-  tent(c, W*0.72, bodyEnd+556, 150, 13);
-  c.solid.push(disc(W*0.5, bodyEnd+612, 10, "bump"));
 
-  const goalY = bodyEnd + 670;
-  const height = goalY + 140;
+  const GATE = 52, ga = 0.60;                  // 통로 52px (구슬 14.8px)
+  const gInner = (W - GATE)/2;
+  const gL = (gInner + 14)/Math.cos(ga);
+  const gcx = (gInner - 14)/2;
+  const gy  = bodyEnd + 300;                   // 깔때기 중심
+  c.solid.push(rect(gcx, gy, gL, 16,  ga, "ramp"));
+  c.solid.push(rect(W-gcx, gy, gL, 16, -ga, "ramp"));
+
+  const gLip = gy + (gL/2)*Math.sin(ga);       // 통로 입구
+  // 차단봉: 가로면 통로를 10px씩 덮어 차단, 세로면 옆 20px로 통과
+  c.spin.push(spinner(W/2, gLip + 12, barGeo(W/2, gLip + 12, 72, 12), 0.030, "blade"));
+
+  const goalY = gLip + 62;                     // 봉 바로 아래가 결승선
+  const height = goalY + 160;
 
   // 좌우 외벽
   c.solid.push(rect(-WALL/2, height/2-150, WALL, height+700, 0, "edge"));
@@ -1066,6 +1083,7 @@ const ui = {
   banner:el("banner"), who:el("bannerWho"), sub:el("bannerSub"), kicker:el("bannerKicker"),
   again:el("btnAgain"), close:el("btnClose"), count:el("count"), countNum:el("countNum"),
   flash:el("flash"), flashRank:el("flashRank"), flashName:el("flashName"),
+  podium:el("podium"), skipHint:el("skipHint"),
   ff:el("btnFF"), cnt:el("cntHint"), copy:el("btnCopy"), xlsx:el("btnXlsx"), resultList:el("resultList"),
   card:document.querySelector("#banner .card")
 };
@@ -1214,6 +1232,7 @@ function start(){
   G.skill = ui.skill.checked; G.sound = ui.sound.checked; G.speed = parseFloat(ui.speed.value);
   MODE = MODE || "first"; G.mode = MODE;
   ui.banner.classList.remove("on");
+  clearReveal();
   setup(entries, ui.map.value);
   G.needed = neededCount(G.marbles.length);
   const wr = winnerRanks(G.marbles.length);
@@ -1261,7 +1280,9 @@ function showResult(){
         + '<span class="dot" style="background:hsl(' + m.hue + ' 82% 58%)"></span>'
         + '<span class="nm">' + esc(m.name) + '</span></li>';
     }).join("");
+    startReveal();
   } else {
+    endReveal();
     const ranks = winnerRanks(total);
     const names = ranks.map(function(r){
       const m = G.finished[r-1];
@@ -1276,8 +1297,51 @@ function showResult(){
   ui.sub.textContent = G.course.mapName + " 코스 · 참가 " + total + "개 · " + (G.raceMs/1000).toFixed(1) + "초";
   ui.banner.classList.add("on");
   ui.ff.hidden = true; G.ff = false; ui.ff.style.background = ""; ui.ff.style.color = ""; ui.ff.style.borderColor = "";
-  fanfare();
+  if (!full) fanfare();
   renderRail();
+}
+
+/* 결과 발표: 3등 → 2등 → 1등 순으로 끊어 보여준 뒤 전체 순위표를 연다.
+   한꺼번에 띄우면 마지막이 밋밋해서, 여기서 한 박자씩 끌어준다. */
+let revealTimers = [];
+function clearReveal(){
+  revealTimers.forEach(function(t){ clearTimeout(t); });
+  revealTimers = [];
+}
+function podRow(m){
+  return '<div class="pod' + (m.rank === 1 ? " win" : "") + '">'
+    + '<span class="r">' + m.rank + '등</span>'
+    + '<span class="n">' + esc(m.name) + '</span></div>';
+}
+function endReveal(){
+  clearReveal();
+  ui.podium.hidden = true; ui.podium.innerHTML = "";
+  ui.skipHint.hidden = true;
+  ui.who.hidden = false; ui.sub.hidden = false;
+  const full = MODE === "all";
+  ui.resultList.hidden = !full;
+  ui.copy.hidden = !full;
+  ui.xlsx.hidden = !full;
+}
+function startReveal(){
+  clearReveal();
+  ui.who.hidden = true; ui.sub.hidden = true;
+  ui.resultList.hidden = true; ui.copy.hidden = true; ui.xlsx.hidden = true;
+  ui.podium.hidden = false; ui.podium.innerHTML = "";
+  ui.skipHint.hidden = false;
+
+  const top = G.finished.slice(0, 3);
+  const seq = [];                                  // 3등 → 2등 → 1등
+  for (let i = top.length - 1; i >= 0; i--) seq.push(top[i]);
+
+  seq.forEach(function(m, i){
+    revealTimers.push(setTimeout(function(){
+      ui.podium.insertAdjacentHTML("beforeend", podRow(m));
+      if (m.rank === 1) fanfare();
+      else beep(440 + (3 - m.rank) * 90, 0.12, "triangle");
+    }, i * 950));
+  });
+  revealTimers.push(setTimeout(endReveal, seq.length * 950 + 1200));
 }
 
 function copyText(text, btn){
@@ -1379,6 +1443,10 @@ ui.copy.addEventListener("click", function(){
   copyText(G.finished.map(function(m){ return m.rank + "\t" + m.name; }).join("\n"), ui.copy);
 });
 
+ui.banner.addEventListener("click", function(){
+  if (!ui.podium.hidden) endReveal();
+});
+
 ui.start.addEventListener("click", start);
 ui.again.addEventListener("click", function(){ ui.banner.classList.remove("on"); start(); });
 ui.close.addEventListener("click", function(){
@@ -1391,6 +1459,9 @@ document.addEventListener("keydown", function(e){
 });
 
 function flash(msg){
+  clearReveal();
+  ui.podium.hidden = true; ui.skipHint.hidden = true;
+  ui.who.hidden = false; ui.sub.hidden = false;
   ui.card.classList.remove("wide");
   ui.resultList.hidden = true; ui.copy.hidden = true; ui.xlsx.hidden = true;
   ui.kicker.textContent = "알림";
