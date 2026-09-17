@@ -1220,46 +1220,66 @@ function stamp(){
   const d = new Date(), z = function(n){ return String(n).padStart(2,"0"); };
   return d.getFullYear() + z(d.getMonth()+1) + z(d.getDate()) + "_" + z(d.getHours()) + z(d.getMinutes());
 }
-function saveBlob(blob, filename){
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+
+/* 파일 건네기.
+   claude.ai 아티팩트 뷰어는 페이지가 직접 거는 다운로드를 막으므로
+   downloads 기능을 쓰고, 일반 웹(공개 주소·로컬 파일)에서는 링크로 받는다. */
+function offerFile(blob, filename, done){
+  function viaLink(){
+    try{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+      done("ok");
+    }catch(e){ done("fail"); }
+  }
+  if (window.claude && typeof window.claude.use === "function"){
+    window.claude.use("downloads").then(function(dl){
+      if (!dl) return viaLink();
+      dl.save({filename: filename, data: blob}).then(
+        function(){ done("ok"); },
+        function(err){ done(err && err.code === "declined" ? "declined" : "fail"); }
+      );
+    }, viaLink);
+  } else viaLink();
 }
-function downloadCsv(){          // 라이브러리를 못 받을 때 대비
-  const rows = [["등수","이름"]].concat(G.finished.map(function(m){ return [m.rank, m.name]; }));
-  const csv = rows.map(function(r){
+
+function rankAoa(){
+  return [["등수","이름"]].concat(G.finished.map(function(m){ return [m.rank, m.name]; }));
+}
+function csvBlob(){
+  const csv = rankAoa().map(function(r){
     return r.map(function(v){ return '"' + String(v).replace(/"/g,'""') + '"'; }).join(",");
   }).join("\r\n");
-  saveBlob(new Blob(["\uFEFF" + csv], {type:"text/csv;charset=utf-8"}),
-           "구슬레이스_순위_" + stamp() + ".csv");
+  return new Blob(["\uFEFF" + csv], {type:"text/csv;charset=utf-8"});
 }
+
 ui.xlsx.addEventListener("click", function(){
   if (!G.finished.length) return;
-  const btn = ui.xlsx, old = "엑셀 받기";
+  const btn = ui.xlsx, label = "엑셀 받기";
   btn.disabled = true; btn.textContent = "준비 중…";
+  const finish = function(state){
+    btn.disabled = false;
+    btn.textContent = state === "ok" ? "받았습니다"
+                    : state === "declined" ? "취소됨" : "실패 — 복사 쓰기";
+    setTimeout(function(){ btn.textContent = label; }, 2200);
+  };
   ensureXLSX(function(ok){
     try{
       if (ok){
-        const aoa = [["등수","이름"]].concat(G.finished.map(function(m){ return [m.rank, m.name]; }));
-        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        const ws = XLSX.utils.aoa_to_sheet(rankAoa());
         ws["!cols"] = [{wch:6},{wch:24}];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "순위");
-        XLSX.writeFile(wb, "구슬레이스_순위_" + stamp() + ".xlsx");
-      } else downloadCsv();
-      btn.textContent = "받는 중…";
-      // 미리보기(iframe)에서는 브라우저가 다운로드를 막는다
-      setTimeout(function(){
-        btn.disabled = false;
-        btn.textContent = (window.self !== window.top) ? "안 받아지면 복사" : old;
-        setTimeout(function(){ btn.textContent = old; }, 3000);
-      }, 900);
-    }catch(e){
-      btn.disabled = false; btn.textContent = "실패 — 복사 쓰기";
-      setTimeout(function(){ btn.textContent = old; }, 2500);
-    }
+        const buf = XLSX.write(wb, {bookType:"xlsx", type:"array"});
+        offerFile(new Blob([buf], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),
+                  "구슬레이스_순위_" + stamp() + ".xlsx", finish);
+      } else {
+        offerFile(csvBlob(), "구슬레이스_순위_" + stamp() + ".csv", finish);
+      }
+    }catch(e){ finish("fail"); }
   });
 });
 
